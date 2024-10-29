@@ -21,24 +21,37 @@ collection="items"
 
 # COMMAND ----------
 
-
 import pyspark.sql.functions as f
 
 # COMMAND ----------
 
 # MAGIC %md ##Read  data from the MongoDB collection running an Aggregation Pipeline.
 # MAGIC
-# MAGIC The pipeline transforms the data from form _products -> reviewsById -> [revA, revB, revC]_, which groups reviews by product ID, to form _revA -> [text, rating, ...], revB -> [...], revC -> [...]_ where each review is separate entry. This form is alot easier to handle for analysis.
+# MAGIC When debugging we run the notebook with limited dataset using aggregation component _$limit_. First we get the limit value from the notebook parameters.
 # MAGIC
-# MAGIC __NOTE:__ Elements from 'prod' have to be extracted using arrayElemAt. Elementst from 'review' don't since we unwind them.
-# MAGIC
-# MAGIC __NOTE:__ Remove _$limit_ from the pipeline when you are done testing the code.
 # MAGIC
 # MAGIC
 
 # COMMAND ----------
 
-pipeline = '''[
+limit = int(dbutils.widgets.get("LIMIT"))
+if limit <= 0: 
+    __LIMIT__ = ""
+else:
+    __LIMIT__ = f"{{$limit: {limit}}},"
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC The pipeline transforms the data from form _products -> reviewsById -> [revA, revB, revC]_, which groups reviews by product ID, to form _revA -> [text, rating, ...], revB -> [...], revC -> [...]_ where each review is separate entry. This form is alot easier to handle for analysis.
+# MAGIC
+# MAGIC __NOTE:__ Elements from 'prod' have to be extracted using arrayElemAt. Elementst from 'review' don't since we unwind them.
+
+# COMMAND ----------
+
+pipeline_raw = '''[
+    __LIMIT__ 
     {$project:
         {
         review: {$objectToArray: "$products.reviewsById"},
@@ -63,6 +76,7 @@ pipeline = '''[
         }
     } 
 ]'''
+pipeline = pipeline_raw.replace("__LIMIT__", __LIMIT__)
 
 df = spark.read.format("com.mongodb.spark.sql.DefaultSource").option("database", database).option("collection", collection).option("pipeline", pipeline).option("spark.mongodb.input.uri", connectionString).load()
 df = df.drop("_id")  # Drop mongoDB objectID.
@@ -88,7 +102,7 @@ df = df.withColumn("lastModified", f.current_timestamp())
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Quick check at the results. Amount of different *product_ids* should give same count as our pipeline _$limit_.
+# MAGIC Quick check at the results. Amount of different *product_ids* should give same count as our pipeline _$limit_, if we are using a limit.
 
 # COMMAND ----------
 
@@ -115,4 +129,4 @@ df = df.dropDuplicates(["id"])
 
 # COMMAND ----------
 
-df.write.mode("overwrite").format("delta").partitionBy("brand_name").saveAsTable("reviews_verkkokauppa_raw")
+df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").partitionBy("brand_name").saveAsTable("reviews_verkkokauppa_raw")
