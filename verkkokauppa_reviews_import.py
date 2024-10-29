@@ -114,13 +114,14 @@ print("Amount of reviews in total: {}".format(df.count()))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Some products are semi-duplicates, e.g. same model of TV in different panel sizes, but the reviews are shown for all different models. This leads to some reviews being introduced to the original database multiple times.
+# MAGIC Some products are semi-duplicates, e.g. same model of TV in different panel sizes, but the reviews are shown for all different models. This leads to some reviews being introduced to the original database multiple times. The duplicate reviews can be identified by the review-id.
 # MAGIC
-# MAGIC The duplicate reviews can be identified by the review-id.
+# MAGIC Also remove all entries where there is no review text. All entries should have one but stuff happens...
 
 # COMMAND ----------
 
 df = df.dropDuplicates(["id"])
+df = df.where(df.text.isNotNull())
 
 # COMMAND ----------
 

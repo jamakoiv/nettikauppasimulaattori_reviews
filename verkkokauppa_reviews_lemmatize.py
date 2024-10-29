@@ -26,10 +26,6 @@ review_texts = [row.text for row in review_rows]
 
 # COMMAND ----------
 
-# MAGIC %pip install stanza
-
-# COMMAND ----------
-
 import stanza
 
 remove_upos_categories = [
@@ -163,7 +159,7 @@ assert (
 df_final.write.mode("overwrite").partitionBy("brand_name").parquet(
     "tmp/reviews_verkkokauppa_silver"
 )
-df_final.write.mode("overwrite").format("delta").saveAsTable("reviews_verkkokauppa_silver")
+df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("reviews_verkkokauppa_silver")
 
 
 # COMMAND ----------
@@ -185,7 +181,7 @@ voc_values = [ int(v) for v in to_count.vocabulary_.values() ] # Convert to pyth
 voc_loader = zip(to_count.vocabulary_.keys(), voc_values)
 
 df_voc = spark.createDataFrame(voc_loader, schema=voc_schema)
-df_voc.write.mode("overwrite").format("delta").saveAsTable("reviews_verkkokauppa_vocabulary_fi")
+df_voc.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("reviews_verkkokauppa_vocabulary_fi")
 df_voc.write.mode("overwrite").parquet("tmp/reviews_verkkokauppa_vocabulary_fi")
 
 
