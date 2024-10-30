@@ -10,15 +10,29 @@
 
 # COMMAND ----------
 
-upstream_table = dbutils.widgets.get("UPSTREAM_TABLE")
+from pyspark.sql.functions import lit
 
-df = spark.table(upstream_table)
-df.show()
+df_tv = spark.table("verkkokauppa_reviews_tv_raw")
+df_phones = spark.table("verkkokauppa_reviews_phones_raw")
+df_appliances = spark.table("verkkokauppa_reviews_appliances_raw")
+
+df_tv = df_tv.withColumn("category", lit("tv"))
+df_phones = df_phones.withColumn("category", lit("phone"))
+df_appliances = df_appliances.withColumn("category", lit("appliance"))
+
 
 # COMMAND ----------
 
-print(df.count())
-print(df.where(df.text.isNotNull()).count())
+# MAGIC %md
+# MAGIC Join the reviews into single table so we don't have to save three tables downstream.
+
+# COMMAND ----------
+
+df = df_tv.union(df_phones).union(df_appliances)
+
+assert df_tv.count() + df_phones.count() + df_appliances.count() == df.count(), "The number of rows in the unioned dataframe should be the sum of the rows in the original dataframes."
+
+df.groupBy("category").count().show()
 
 # COMMAND ----------
 
@@ -103,5 +117,5 @@ df_final.select("language", "text").where(df_final.language == "fi").head(2)
 
 # COMMAND ----------
 
-df_final.write.mode("overwrite").partitionBy("brand_name").parquet("/tmp/reviews_verkkokauppa_bronze")
-df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("reviews_verkkokauppa_bronze")
+df_final.write.mode("overwrite").partitionBy("brand_name").parquet("/tmp/verkkokauppa_reviews_bronze")
+df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_bronze")
