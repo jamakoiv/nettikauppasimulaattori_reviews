@@ -17,15 +17,6 @@ downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE")
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC Import necessary spark functions
-
-# COMMAND ----------
-
-import pyspark.sql.functions as f
-
-# COMMAND ----------
-
 # MAGIC %md ##Read  data from the MongoDB collection running an Aggregation Pipeline.
 # MAGIC
 # MAGIC When debugging we run the notebook with limited dataset using aggregation component _$limit_. First we get the limit value from the notebook parameters.
@@ -94,8 +85,9 @@ df.select("brand_name").distinct().show()
 
 # COMMAND ----------
 
-df = df.withColumn("lastModified", f.current_timestamp())
+from pyspark.sql.functions import current_timestamp
 
+df = df.withColumn("lastModified", current_timestamp())
 
 # COMMAND ----------
 
