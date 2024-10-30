@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC ## Import verkkokauppa reviews from Azure cosmos (mongoDB connection). Identify the review language and save reviews to delta-table.
+# MAGIC ## Import verkkokauppa reviews from Azure cosmos (mongoDB connection). Perform basic pruning, throw away NULLs etc., finally save reviews to delta-table.
 # MAGIC
 # MAGIC First define connection parameters for _mongodb_.
 # MAGIC
@@ -10,9 +10,10 @@
 # COMMAND ----------
 
 connectionString='mongodb+srv://jamakoiv:{passwd}@cosmos-mongo-testi.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000&wtimeoutMS=0'.format(passwd=dbutils.secrets.get(scope="azure_mongodb", key="mongopasswd"))
-database="verkkokauppa"
-collection="items"
 
+database = dbutils.widgets.get("DATABASE")
+collection = dbutils.widgets.get("COLLECTION")
+downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE") 
 
 # COMMAND ----------
 
@@ -69,10 +70,7 @@ pipeline_raw = '''[
             text: "$review.v.reviewText",
             title: "$review.v.title",
             rating: "$review.v.rating",
-            reviewerAge: "$review.v.contextDataValues.age.value",
-            kuvanlaatu: "$review.v.secondaryRatings.kuvanlaatu.value",
-            ominaisuudet: "$review.v.secondaryRatings.ominaisuudet.value",
-            kayttomukavuus: "$review.v.secondaryRatings.kayttomukavuus.value"
+            reviewerAge: "$review.v.contextDataValues.age.value"
         }
     } 
 ]'''
@@ -130,4 +128,4 @@ df = df.where(df.text.isNotNull())
 
 # COMMAND ----------
 
-df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").partitionBy("brand_name").saveAsTable("reviews_verkkokauppa_raw")
+df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").partitionBy("brand_name").saveAsTable(downstream_table)

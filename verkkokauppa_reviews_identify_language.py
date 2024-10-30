@@ -6,11 +6,13 @@
 # MAGIC
 # MAGIC For language identification we use [Stanza](https://stanfordnlp.github.io/stanza/), which should be installed on cluster-libraries instead of using pip-magic commands.
 # MAGIC
-# MAGIC First import necessary SQL-functions the table containing raw-reviews.
+# MAGIC First import the table containing the raw reviews.
 
 # COMMAND ----------
 
-df = spark.table("reviews_verkkokauppa_raw")
+upstream_table = dbutils.widgets.get("UPSTREAM_TABLE")
+
+df = spark.table(upstream_table)
 df.show()
 
 # COMMAND ----------
