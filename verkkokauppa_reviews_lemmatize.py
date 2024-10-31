@@ -159,7 +159,7 @@ assert (
 df_final.write.mode("overwrite").partitionBy("brand_name").parquet(
     "tmp/reviews_verkkokauppa_silver"
 )
-df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("reviews_verkkokauppa_silver")
+df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_silver")
 
 
 # COMMAND ----------
