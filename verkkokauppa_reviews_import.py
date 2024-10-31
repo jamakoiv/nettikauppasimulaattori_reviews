@@ -32,7 +32,6 @@ if limit <= 0:
 else:
     __LIMIT__ = f"{{$limit: {limit}}},"
 
-
 # COMMAND ----------
 
 # MAGIC %md
@@ -55,7 +54,6 @@ pipeline_raw = '''[
         {
             id: "$review.k",
             product_id: {$arrayElemAt: ["$prod.v.pid", 0]},
-            product_id_alt: "$review.v.pid.value",
             brand_name: { $toLower: {$arrayElemAt: ["$prod.v.brandName", 0]} },
             product_name: {$arrayElemAt: ["$prod.v.name", 0]}, 
             text: "$review.v.reviewText",
@@ -67,8 +65,19 @@ pipeline_raw = '''[
 ]'''
 pipeline = pipeline_raw.replace("__LIMIT__", __LIMIT__)
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Import the data from *Azure cosmos/mongoDB*.
+
+# COMMAND ----------
+
 df = spark.read.format("com.mongodb.spark.sql.DefaultSource").option("database", database).option("collection", collection).option("pipeline", pipeline).option("spark.mongodb.input.uri", connectionString).load()
-df = df.drop("_id")  # Drop mongoDB objectID.
+
+# Make sure *id* and *product_id* are integers.
+df = df.withColumn("id_int", df.id.cast("int")).withColumn("product_id_int", df.product_id.cast("int"))
+df = df.drop("_id", "id", "product_id")
+df = df.withColumnRenamed("id_int", "id").withColumnRenamed("product_id_int", "product_id")
 
 df.show()
 
