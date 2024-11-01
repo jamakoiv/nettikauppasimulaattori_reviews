@@ -102,6 +102,7 @@ df = df.join(df_res, "id")
 # COMMAND ----------
 
 df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_gold")
+df.write.mode("overwrite").parquet("tmp/verkkokauppa_reviews_gold")
 
 voc_schema = StructType(
     [StructField("word", StringType(), False), StructField("id", IntegerType(), False)]
