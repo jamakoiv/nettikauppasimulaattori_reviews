@@ -9,10 +9,12 @@
 
 # COMMAND ----------
 
+from pyspark.sql.functions import col
+
 df = spark.table("verkkokauppa_reviews_bronze")
 df_fi = df.filter(df.language == "fi") # For now we only look Finnish reviews. Would be possible to take list of identified languages, create stanza NPL pipeline for each, and run the lemmatization.
 
-review_rows = df_fi.select("id", "text", "title").collect()
+review_rows = df_fi.select("id", "text", "title").where(col("title").isNotNull()).collect()
 review_ids = [int(row.id) for row in review_rows]
 review_texts = [row.text for row in review_rows]
 review_titles = [row.title for row in review_rows]
@@ -49,7 +51,7 @@ review_title_docs = nlp.bulk_process(review_titles)
 
 # COMMAND ----------
 
-def get_lemmas(docs: list[stanza.core.Document]) -> list[list[str]]:
+def get_lemmas(docs: list[stanza.Document]) -> list[list[str]]:
     words = []
     
     for doc in docs:
