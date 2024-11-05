@@ -52,10 +52,12 @@ reviews_lemmatized_text = [row.lemmatized_text for row in rows]
 # MAGIC * max_features: Maximum amount of features permitted.
 # MAGIC
 # MAGIC After creating and fitting the model, do a quick check at the bag-size. First number is the amount of texts, and the second in amount of words that survived the cutoff.
+# MAGIC
+# MAGIC TODO: Make *max_df* and *min_df* notebook parameters.
 
 # COMMAND ----------
 
-to_count = CountVectorizer(max_df = 0.50, min_df = 5)
+to_count = CountVectorizer(max_df = 0.50, min_df = 20)
 count_bag = to_count.fit_transform(reviews_lemmatized_text)
 
 print(count_bag.shape)
