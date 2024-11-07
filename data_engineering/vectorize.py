@@ -99,6 +99,7 @@ tfidf_bag = to_tfidf.fit_transform(count_bag)
 
 # COMMAND ----------
 
+from pyspark.sql.functions import when
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType, FloatType
 res_schema = StructType(
     [
@@ -147,6 +148,15 @@ df = df.join(df_res, "id")
     ), "Dataframe ID columns do not match."
 
     df = df.join(df_train.union(df_test), "id")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Tag reviews as positive or negative for binary classification. This should be easier to handle than classification into 5 categories.
+
+# COMMAND ----------
+
+df = df.withColumn("positive_review", when(df.rating >= 4, 1).when(df.rating < 4, 0))
 
 # COMMAND ----------
 
