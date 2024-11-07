@@ -1,6 +1,8 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC ## Extract individual words lemmas from the reviews.
+# MAGIC
+# MAGIC Analyze the review text using NLP-processor, in our case Stanza which we already used in language identification step. Stanza is capable of various NLP-tasks. We want to extract the *part-of-speech (POS)* and *lemma* information of each word in the sentence. Part-of-speech can be used to remove words which are not informative for our analysis purposes, while lemmatization is used to remove the word inflections. Without lemmatization words like "better", "best", and "good" will be considered as three different unrelated words, while each share the same lemma "good".
 
 # COMMAND ----------
 
