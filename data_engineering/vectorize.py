@@ -38,7 +38,7 @@ else:
     raise Exception("TARGET must be either TEST or PROD")
 
 upstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
-downstream_table = "verkkokauppa_reviews_bronze" + settings["table_suffix"]
+downstream_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
 
 # COMMAND ----------
 
