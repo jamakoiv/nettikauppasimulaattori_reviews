@@ -9,11 +9,24 @@
 
 # COMMAND ----------
 
+if dbutils.widgets.get("TARGET") == "TEST":
+    settings = {"table_suffix": "_test",
+                "limit": "{$limit: 20},"}
+
+elif dbutils.widgets.get("TARGET") == "PROD":
+    settings = {"table_suffix": "",
+                "limit": ""}
+    
+else:
+    raise Exception("TARGET must be either TEST or PROD")
+
+# COMMAND ----------
+
 connectionString='mongodb+srv://jamakoiv:{passwd}@cosmos-mongo-testi.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000&wtimeoutMS=0'.format(passwd=dbutils.secrets.get(scope="azure_mongodb", key="mongopasswd"))
 
 database = dbutils.widgets.get("DATABASE")
 collection = dbutils.widgets.get("COLLECTION")
-downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE") 
+downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE") + settings["table_suffix"]
 
 # COMMAND ----------
 
@@ -21,23 +34,11 @@ downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE")
 # MAGIC
 # MAGIC When debugging we run the notebook with limited dataset using aggregation component _$limit_. First we get the limit value from the notebook parameters.
 # MAGIC
-# MAGIC
-# MAGIC
-
-# COMMAND ----------
-
-limit = int(dbutils.widgets.get("LIMIT"))
-if limit <= 0: 
-    __LIMIT__ = ""
-else:
-    __LIMIT__ = f"{{$limit: {limit}}},"
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC The pipeline transforms the data from form _products -> reviewsById -> [revA, revB, revC]_, which groups reviews by product ID, to form _revA -> [text, rating, ...], revB -> [...], revC -> [...]_ where each review is separate entry. This form is alot easier to handle for analysis.
 # MAGIC
 # MAGIC __NOTE:__ Elements from 'prod' have to be extracted using arrayElemAt. Elementst from 'review' don't since we unwind them.
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -63,7 +64,9 @@ pipeline_raw = '''[
         }
     } 
 ]'''
-pipeline = pipeline_raw.replace("__LIMIT__", __LIMIT__)
+pipeline = pipeline_raw.replace("__LIMIT__", settings["limit"])
+
+print(pipeline)
 
 # COMMAND ----------
 
@@ -115,17 +118,18 @@ print("Amount of reviews in total: {}".format(df.count()))
 # MAGIC %md
 # MAGIC Some products are semi-duplicates, e.g. same model of TV in different panel sizes, but the reviews are shown for all different models. This leads to some reviews being introduced to the original database multiple times. The duplicate reviews can be identified by the review-id.
 # MAGIC
-# MAGIC Also remove all entries where there is no review text. All entries should have one but stuff happens...
+# MAGIC Also remove all entries where there is no review text or title text. All entries should have one but stuff happens...
 
 # COMMAND ----------
 
 df = df.dropDuplicates(["id"])
 df = df.where(df.text.isNotNull())
+df = df.where(df.title.isNotNull())
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Save tables as _parquet_, for exporting to local machine for testing, and in _delta_, for usage in Databricks.
+# MAGIC Save raw-tables.
 
 # COMMAND ----------
 

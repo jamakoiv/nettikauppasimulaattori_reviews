@@ -26,6 +26,22 @@
 
 # COMMAND ----------
 
+if dbutils.widgets.get("TARGET") == "TEST":
+    settings = {"table_suffix": "_test",
+                "limit": "{$limit: 20},"}
+
+elif dbutils.widgets.get("TARGET") == "PROD":
+    settings = {"table_suffix": "",
+                "limit": ""}
+    
+else:
+    raise Exception("TARGET must be either TEST or PROD")
+
+upstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
+downstream_table = "verkkokauppa_reviews_bronze" + settings["table_suffix"]
+
+# COMMAND ----------
+
 from sklearn.feature_extraction.text import (
     CountVectorizer,
     TfidfTransformer,
@@ -33,7 +49,7 @@ from sklearn.feature_extraction.text import (
 )
 from sklearn.model_selection import train_test_split
 
-df = spark.table("verkkokauppa_reviews_silver")
+df = spark.table(upstream_table)
 
 rows = df.select("id", "lemmatized_text", "rating").collect()
 reviews_id = [row.id for row in rows]
@@ -103,8 +119,8 @@ df = df.join(df_res, "id")
 
 # COMMAND ----------
 
-df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_gold")
-df.write.mode("overwrite").parquet("tmp/verkkokauppa_reviews_gold")
+df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
+df.write.mode("overwrite").parquet(f"tmp/{downstream_table}")
 
 voc_schema = StructType(
     [StructField("word", StringType(), False), StructField("id", IntegerType(), False)]

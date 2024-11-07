@@ -10,11 +10,28 @@
 
 # COMMAND ----------
 
+if dbutils.widgets.get("TARGET") == "TEST":
+    settings = {"table_suffix": "_test",
+                "limit": "{$limit: 20},"}
+
+elif dbutils.widgets.get("TARGET") == "PROD":
+    settings = {"table_suffix": "",
+                "limit": ""}
+    
+else:
+    raise Exception("TARGET must be either TEST or PROD")
+
+#downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE") + settings["table_suffix"]
+downstream_table = "verkkokauppa_reviews_bronze" + settings["table_suffix"]
+
+# COMMAND ----------
+
 from pyspark.sql.functions import lit
 
-df_tv = spark.table("verkkokauppa_reviews_tv_raw")
-df_phones = spark.table("verkkokauppa_reviews_phones_raw")
-df_appliances = spark.table("verkkokauppa_reviews_appliances_raw")
+# TODO: Clumsy way of making the upstream table names.
+df_tv = spark.table(f"verkkokauppa_reviews_tv_raw{settings['table_suffix']}")
+df_phones = spark.table(f"verkkokauppa_reviews_phones_raw{settings['table_suffix']}")
+df_appliances = spark.table(f"verkkokauppa_reviews_appliances_raw{settings['table_suffix']}")
 
 df_tv = df_tv.withColumn("category", lit("tv"))
 df_phones = df_phones.withColumn("category", lit("phone"))
@@ -117,5 +134,5 @@ df_final.select("language", "text").where(df_final.language == "fi").head(2)
 
 # COMMAND ----------
 
-df_final.write.mode("overwrite").partitionBy("brand_name").parquet("/tmp/verkkokauppa_reviews_bronze")
-df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_bronze")
+df_final.write.mode("overwrite").partitionBy("brand_name").parquet(f"/tmp/{downstream_table}")
+df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)

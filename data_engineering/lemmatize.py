@@ -3,6 +3,24 @@
 # MAGIC ## Extract individual words lemmas from the reviews.
 # MAGIC
 # MAGIC Analyze the review text using NLP-processor, in our case Stanza which we already used in language identification step. Stanza is capable of various NLP-tasks. We want to extract the *part-of-speech (POS)* and *lemma* information of each word in the sentence. Part-of-speech can be used to remove words which are not informative for our analysis purposes, while lemmatization is used to remove the word inflections. Without lemmatization words like "better", "best", and "good" will be considered as three different unrelated words, while each share the same lemma "good".
+# MAGIC
+# MAGIC TODO: Maybe just add title and text together and analyse them as single text body.
+
+# COMMAND ----------
+
+if dbutils.widgets.get("TARGET") == "TEST":
+    settings = {"table_suffix": "_test",
+                "limit": "{$limit: 20},"}
+
+elif dbutils.widgets.get("TARGET") == "PROD":
+    settings = {"table_suffix": "",
+                "limit": ""}
+    
+else:
+    raise Exception("TARGET must be either TEST or PROD")
+
+upstream_table = "verkkokauppa_reviews_bronze" + settings["table_suffix"]
+downstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
 
 # COMMAND ----------
 
@@ -13,7 +31,7 @@
 
 from pyspark.sql.functions import col
 
-df = spark.table("verkkokauppa_reviews_bronze")
+df = spark.table(upstream_table)
 df_fi = df.filter(df.language == "fi") # For now we only look Finnish reviews. Would be possible to take list of identified languages, create stanza NPL pipeline for each, and run the lemmatization.
 
 review_rows = df_fi.select("id", "text", "title").where(col("title").isNotNull()).collect()
@@ -133,9 +151,9 @@ assert (
 ), "Final table is not the same length as the lemmatized text/title dataset. Probably JOIN failed somehow, duplicate data, or xyz..."
 
 df_final.write.mode("overwrite").partitionBy("brand_name").parquet(
-    "tmp/verkkokauppa_reviews_silver"
+    f"tmp/{downstream_table}"
 )
-df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_silver")
+df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
 
 
 # COMMAND ----------
