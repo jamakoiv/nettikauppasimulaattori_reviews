@@ -115,6 +115,42 @@ df = df.join(df_res, "id")
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC Apply the test-train split, save as a label to the dataframe.
+# MAGIC
+# MAGIC TODO: Should this be here, before vectorization, or left to the first analysis step?
+# MAGIC Currently left here so we can use same train-test split in the model training and basic analysis steps.
+
+# COMMAND ----------
+
+    import numpy as np
+    
+    rows = df.select("id", "rating").collect()
+    reviews_id = np.array([row.id for row in rows])
+    reviews_rating = np.array([row.rating for row in rows])
+
+    # Create train-test split and join labels back to original dataframe.
+    id_train, id_test = train_test_split(
+        reviews_id, test_size=0.25, stratify=reviews_rating
+    )
+
+    df_train = spark.createDataFrame(
+        zip(id_train.tolist(), ["train"] * len(id_train)),  # pyright: ignore
+        ["id", "train_test"],
+    )
+    df_test = spark.createDataFrame(
+        zip(id_test.tolist(), ["test"] * len(id_test)),  # pyright: ignore
+        ["id", "train_test"],
+    )
+    assert (
+        df_train.union(df_test).select("id").orderBy("id").collect()
+        == df.select("id").orderBy("id").collect()
+    ), "Dataframe ID columns do not match."
+
+    df = df.join(df_train.union(df_test), "id")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC Save table as usual. Save also the vocabulary since we need it for the inference step for creating a vectorizer for this word-set.
 
 # COMMAND ----------
