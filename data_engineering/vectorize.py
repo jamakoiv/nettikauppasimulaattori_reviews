@@ -26,6 +26,17 @@
 
 # COMMAND ----------
 
+# MAGIC %run ../utils/run_target_helper
+
+# COMMAND ----------
+
+settings = get_settings(dbutils.widgets.get("TARGET"))
+
+upstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
+downstream_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
+
+# COMMAND ----------
+
 from sklearn.feature_extraction.text import (
     CountVectorizer,
     TfidfTransformer,
@@ -33,7 +44,7 @@ from sklearn.feature_extraction.text import (
 )
 from sklearn.model_selection import train_test_split
 
-df = spark.table("verkkokauppa_reviews_silver")
+df = spark.table(upstream_table)
 
 rows = df.select("id", "lemmatized_text", "rating").collect()
 reviews_id = [row.id for row in rows]
@@ -83,6 +94,7 @@ tfidf_bag = to_tfidf.fit_transform(count_bag)
 
 # COMMAND ----------
 
+from pyspark.sql.functions import when
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType, FloatType
 res_schema = StructType(
     [
@@ -99,12 +111,57 @@ df = df.join(df_res, "id")
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC Apply the test-train split, save as a label to the dataframe.
+# MAGIC
+# MAGIC TODO: Should this be here, before vectorization, or left to the first analysis step?
+# MAGIC Currently left here so we can use same train-test split in the model training and basic analysis steps.
+
+# COMMAND ----------
+
+    import numpy as np
+    
+    rows = df.select("id", "rating").collect()
+    reviews_id = np.array([row.id for row in rows])
+    reviews_rating = np.array([row.rating for row in rows])
+
+    # Create train-test split and join labels back to original dataframe.
+    id_train, id_test = train_test_split(
+        reviews_id, test_size=0.25, stratify=reviews_rating
+    )
+
+    df_train = spark.createDataFrame(
+        zip(id_train.tolist(), ["train"] * len(id_train)),  # pyright: ignore
+        ["id", "train_test"],
+    )
+    df_test = spark.createDataFrame(
+        zip(id_test.tolist(), ["test"] * len(id_test)),  # pyright: ignore
+        ["id", "train_test"],
+    )
+    assert (
+        df_train.union(df_test).select("id").orderBy("id").collect()
+        == df.select("id").orderBy("id").collect()
+    ), "Dataframe ID columns do not match."
+
+    df = df.join(df_train.union(df_test), "id")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Tag reviews as positive or negative for binary classification. This should be easier to handle than classification into 5 categories.
+
+# COMMAND ----------
+
+df = df.withColumn("positive_review", when(df.rating >= 4, 1).when(df.rating < 4, 0))
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC Save table as usual. Save also the vocabulary since we need it for the inference step for creating a vectorizer for this word-set.
 
 # COMMAND ----------
 
-df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_gold")
-df.write.mode("overwrite").parquet("tmp/verkkokauppa_reviews_gold")
+df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
+df.write.mode("overwrite").parquet(f"tmp/{downstream_table}")
 
 voc_schema = StructType(
     [StructField("word", StringType(), False), StructField("id", IntegerType(), False)]
