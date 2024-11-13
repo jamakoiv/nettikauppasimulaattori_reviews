@@ -10,16 +10,11 @@
 
 # COMMAND ----------
 
-if dbutils.widgets.get("TARGET") == "TEST":
-    settings = {"table_suffix": "_test",
-                "limit": "{$limit: 20},"}
+# MAGIC %run ../utils/run_target_helper
 
-elif dbutils.widgets.get("TARGET") == "PROD":
-    settings = {"table_suffix": "",
-                "limit": ""}
-    
-else:
-    raise Exception("TARGET must be either TEST or PROD")
+# COMMAND ----------
+
+settings = get_settings(dbutils.widgets.get("TARGET"))
 
 #downstream_table = dbutils.widgets.get("DOWNSTREAM_TABLE") + settings["table_suffix"]
 downstream_table = "verkkokauppa_reviews_bronze" + settings["table_suffix"]

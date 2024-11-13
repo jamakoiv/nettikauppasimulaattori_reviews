@@ -9,18 +9,11 @@
 
 # COMMAND ----------
 
-if dbutils.widgets.get("TARGET") == "TEST":
-    settings = {"table_suffix": "_test",
-                "limit": "{$limit: 20},"}
-
-elif dbutils.widgets.get("TARGET") == "PROD":
-    settings = {"table_suffix": "",
-                "limit": ""}
-    
-else:
-    raise Exception("TARGET must be either TEST or PROD")
+# MAGIC %run ../utils/run_target_helper
 
 # COMMAND ----------
+
+settings = get_settings(dbutils.widgets.get("TARGET"))
 
 connectionString='mongodb+srv://jamakoiv:{passwd}@cosmos-mongo-testi.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000&wtimeoutMS=0'.format(passwd=dbutils.secrets.get(scope="azure_mongodb", key="mongopasswd"))
 
