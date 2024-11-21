@@ -21,6 +21,27 @@
 # MAGIC \end{gather*}$$
 # MAGIC
 # MAGIC In this model every word in the input material will create new dimension to the vector, so we end up with a sparse matrix since most words are rarely used.
+# MAGIC Only considering single words will lose any information of word order. This is obviously bad for sentences where the order might change the meaning of the entire sentence, e.g. "cat ate dog" and "dog ate cat" would result in exactly same vectors. This can be mitigated taking higher *ngrams*, in other words considering two-word, three-word, etc. phrases. Taking only ngram = 1 of our example sentences gives word space *dog, ate, cat*, and both vectors are *[1,1,1]*. If we take ngrams = (1,2), we instead get
+# MAGIC $$
+# MAGIC \begin{align*}
+# MAGIC \text{cat},
+# MAGIC \text{ate},
+# MAGIC \text{dog},
+# MAGIC \text{cat ate},
+# MAGIC \text{ate dog},
+# MAGIC \text{dog ate},
+# MAGIC \text{ate cat},
+# MAGIC \end{align*}
+# MAGIC $$
+# MAGIC and the resulting vectors are
+# MAGIC $$
+# MAGIC [1, 0, 1, 1, 1, 1, 0]
+# MAGIC $$
+# MAGIC and
+# MAGIC $$
+# MAGIC [1, 1, 0, 1, 0, 1, 1]
+# MAGIC $$
+# MAGIC showing that we preserve atleast some information from the word order.
 # MAGIC
 # MAGIC First import the necessary vectorizers and lemmatized review texts from upstream notebooks.
 
@@ -46,10 +67,10 @@ from sklearn.model_selection import train_test_split
 
 df = spark.table(upstream_table)
 
-rows = df.select("id", "lemmatized_text", "rating").collect()
+rows = df.select("id", "lemmatized", "rating").collect()
 reviews_id = [row.id for row in rows]
 reviews_rating = [row.rating for row in rows]
-reviews_lemmatized_text = [row.lemmatized_text for row in rows]
+reviews_lemmatized_text = [row.lemmatized for row in rows]
 
 # COMMAND ----------
 
@@ -61,14 +82,17 @@ reviews_lemmatized_text = [row.lemmatized_text for row in rows]
 # MAGIC * max_df: Max document frequency. If float, throw away words which are present in higher than specified percentage of input documents. If integer, use absolute document numbers.
 # MAGIC * min_df: Min document frequency. Same as *max_df_ but as lower limit.
 # MAGIC * max_features: Maximum amount of features permitted.
+# MAGIC * ngram_range: Word groups to vectorize. (1,1) only takes single words, (1,2) takes single words and two word phrases, etc. 
 # MAGIC
 # MAGIC After creating and fitting the model, do a quick check at the bag-size. First number is the amount of texts, and the second in amount of words that survived the cutoff.
+# MAGIC
+# MAGIC NOTE: After checking the resulting dimensions, we can safely say that the min_df number is the dominant parameter. 
 # MAGIC
 # MAGIC TODO: Make *max_df* and *min_df* notebook parameters.
 
 # COMMAND ----------
 
-to_count = CountVectorizer(max_df = 0.50, min_df = 20)
+to_count = CountVectorizer(max_df = 0.80, min_df = 5, ngram_range=(1,3))
 count_bag = to_count.fit_transform(reviews_lemmatized_text)
 
 print(count_bag.shape)
