@@ -86,13 +86,15 @@ reviews_lemmatized_text = [row.lemmatized for row in rows]
 # MAGIC
 # MAGIC After creating and fitting the model, do a quick check at the bag-size. First number is the amount of texts, and the second in amount of words that survived the cutoff.
 # MAGIC
-# MAGIC NOTE: After checking the resulting dimensions, we can safely say that the min_df number is the dominant parameter. 
+# MAGIC NOTE: After checking the resulting dimensions, we can safely say that the min_df number is the dominant parameter.
+# MAGIC
+# MAGIC NOTE: min_df is set to very small, and ngram is quite high. This is done to generate enough words & phrases to get something out of our rather small dataset.
 # MAGIC
 # MAGIC TODO: Make *max_df* and *min_df* notebook parameters.
 
 # COMMAND ----------
 
-to_count = CountVectorizer(max_df = 0.80, min_df = 5, ngram_range=(1,3))
+to_count = CountVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
 count_bag = to_count.fit_transform(reviews_lemmatized_text)
 
 print(count_bag.shape)
