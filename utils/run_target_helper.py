@@ -1,6 +1,6 @@
 # Databricks notebook source
 def get_settings(target: str) -> dict[str, str]:
-    match target:
+    match target.upper().strip():
         case "TEST":
             settings = {"table_suffix": "_test",
                         "limit": "{$limit: 20},"}
