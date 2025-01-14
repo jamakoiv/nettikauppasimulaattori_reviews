@@ -187,7 +187,7 @@ df = df.withColumn("positive_review", when(df.rating >= 4, 1).when(df.rating < 4
 # COMMAND ----------
 
 df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
-df.write.mode("overwrite").parquet(f"tmp/{downstream_table}")
+df.write.mode("overwrite").parquet(f"/tmp/{downstream_table}")
 
 voc_schema = StructType(
     [StructField("word", StringType(), False), StructField("id", IntegerType(), False)]
