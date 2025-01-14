@@ -147,7 +147,7 @@ assert (
 ), "Final table is not the same length as the lemmatized text/title dataset. Probably JOIN failed somehow, duplicate data, or xyz..."
 
 df_final.write.mode("overwrite").partitionBy("brand_name").parquet(
-    f"tmp/{downstream_table}"
+    f"/tmp/{downstream_table}"
 )
 df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
 
