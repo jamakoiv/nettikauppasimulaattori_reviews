@@ -197,4 +197,4 @@ voc_loader = zip(to_count.vocabulary_.keys(), voc_values)
 
 df_voc = spark.createDataFrame(voc_loader, schema=voc_schema)
 df_voc.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_vocabulary_fi")
-df_voc.write.mode("overwrite").parquet("tmp/verkkokauppa_reviews_vocabulary_fi")
+df_voc.write.mode("overwrite").parquet("/tmp/verkkokauppa_reviews_vocabulary_fi")
