@@ -67,10 +67,7 @@ from sklearn.model_selection import train_test_split
 
 df = spark.table(upstream_table)
 
-rows = df.select("id", "lemmatized", "rating").collect()
-reviews_id = [row.id for row in rows]
-reviews_rating = [row.rating for row in rows]
-reviews_lemmatized_text = [row.lemmatized for row in rows]
+data = df.select("id", "lemmatized", "rating").toPandas()
 
 # COMMAND ----------
 
@@ -95,9 +92,10 @@ reviews_lemmatized_text = [row.lemmatized for row in rows]
 # COMMAND ----------
 
 to_count = CountVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
-count_bag = to_count.fit_transform(reviews_lemmatized_text)
+count_bag = to_count.fit_transform(data['lemmatized'].values)
 
 print(count_bag.shape)
+print(type(count_bag))
 
 # COMMAND ----------
 
@@ -120,19 +118,7 @@ tfidf_bag = to_tfidf.fit_transform(count_bag)
 
 # COMMAND ----------
 
-from pyspark.sql.functions import when
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType, FloatType
-res_schema = StructType(
-    [
-    StructField("id", IntegerType(), False),
-    StructField("count", ArrayType(IntegerType(), True), False),
-    StructField("tfidf", ArrayType(FloatType(), True), False)
-    ]
-)
-res_loader = zip(reviews_id, count_bag.toarray().tolist(), tfidf_bag.toarray().tolist())
-
-df_res = spark.createDataFrame(res_loader, schema=res_schema)
-df = df.join(df_res, "id")
+data = data.assign(tfidf=tfidf_bag.toarray().tolist())
 
 # COMMAND ----------
 
@@ -144,31 +130,23 @@ df = df.join(df_res, "id")
 
 # COMMAND ----------
 
-    import numpy as np
-    
-    rows = df.select("id", "rating").collect()
-    reviews_id = np.array([row.id for row in rows])
-    reviews_rating = np.array([row.rating for row in rows])
+import numpy as np
+import pandas as pd
 
-    # Create train-test split and join labels back to original dataframe.
-    id_train, id_test = train_test_split(
-        reviews_id, test_size=0.25, stratify=reviews_rating
-    )
+from pyspark.sql.functions import col, lit
+from sklearn.model_selection import train_test_split
 
-    df_train = spark.createDataFrame(
-        zip(id_train.tolist(), ["train"] * len(id_train)),  # pyright: ignore
-        ["id", "train_test"],
-    )
-    df_test = spark.createDataFrame(
-        zip(id_test.tolist(), ["test"] * len(id_test)),  # pyright: ignore
-        ["id", "train_test"],
-    )
-    assert (
-        df_train.union(df_test).select("id").orderBy("id").collect()
-        == df.select("id").orderBy("id").collect()
-    ), "Dataframe ID columns do not match."
+# Create train-test split
+id_train, id_test = train_test_split(
+    data['id'], test_size=0.25, stratify=data['rating'].values
+)
 
-    df = df.join(df_train.union(df_test), "id")
+data['train_test'] = np.where(data['id'].isin(id_train), 'train', 'test')
+
+# Join labels back to the original DataFrame
+df = df.join(spark.createDataFrame(data[['id', 'train_test', 'tfidf']]), "id")
+
+display(df)
 
 # COMMAND ----------
 
