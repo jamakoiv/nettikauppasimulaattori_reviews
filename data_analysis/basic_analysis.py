@@ -50,10 +50,8 @@ sns.histplot(data=df_bronze, x="language", ax=ax1)
 sns.histplot(data=df_gold, x="rating", hue="train_test", multiple="stack", ax=ax2)
 sns.histplot(data=df_bronze, x="rating", hue="category", multiple="dodge", ax=ax3, bins=10)
 
-# Not working as the notebook renders the plot immediately when calling histplot.
-ax2.set_xlabel("")  
-ax3.set_xlabel("")
-
+ax2.set_ylabel("")  
+ax3.set_ylabel("")
 fig.show()
 
 

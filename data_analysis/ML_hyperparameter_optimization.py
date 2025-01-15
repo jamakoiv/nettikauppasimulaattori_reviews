@@ -12,6 +12,10 @@
 
 # COMMAND ----------
 
+import pyspark
+
+# COMMAND ----------
+
 # MAGIC %run ../utils/run_target_helper
 
 # COMMAND ----------
@@ -20,6 +24,10 @@
 # MAGIC First import necessary libraries. Optuna is not included in the databricks ML runtime and should be configured manually from *compute->cluster->libraries*.
 # MAGIC
 # MAGIC NOTE: install both *optuna* and *optuna-integration*
+
+# COMMAND ----------
+
+# MAGIC %pip install optuna optuna-integration
 
 # COMMAND ----------
 
@@ -143,6 +151,8 @@ X_train, X_test, y_train, y_test, z_train, z_test = get_training_dataset(df_gold
 # COMMAND ----------
 
 import joblib
+import joblibspark
+
 from joblibspark import register_spark
 
 register_spark() # register Spark backend for Joblib
@@ -154,10 +164,14 @@ register_spark() # register Spark backend for Joblib
 
 # MAGIC %md
 # MAGIC Databricks MLflow integration does track the scikit-learn model runs automatically, but for better integration it is advised to create a callback funtion using optunas *MLFlowCallback*.
+# MAGIC
+# MAGIC NOTE: If you set up the MLFlowCallback, then it is best to disable the autologging. Otherwise it can get confusing and the logging system takes forever to run.
 
 # COMMAND ----------
 
 import mlflow
+mlflow.autolog(disable=True)
+
 from optuna.integration.mlflow import MLflowCallback
 
 
@@ -192,3 +206,36 @@ with joblib.parallel_backend("spark", n_jobs=4):
 # COMMAND ----------
 
 print(study.best_trial.params)
+
+# COMMAND ----------
+
+mlflow.autolog(disable=True)
+
+model_default = BalancedRandomForestClassifier()
+model_default = model_default.fit(X_train, z_train) 
+pred_default = model_default.predict(X_test)
+
+model_optimized = BalancedRandomForestClassifier(**study.best_trial.params)
+model_optimized = model_optimized.fit(X_train, z_train) 
+pred_optimized = model_optimized.predict(X_test)
+
+# COMMAND ----------
+
+import seaborn as sns
+sns.set_theme()
+
+fig = plt.figure(figsize=(8, 8))
+ax1 = fig.add_subplot(2, 2, 1)
+ax2 = fig.add_subplot(2, 2, 2)
+
+conf_mat_default = confusion_matrix(z_test, pred_default)
+conf_mat_optimized = confusion_matrix(z_test, pred_optimized)
+
+sns.heatmap(conf_mat_default, annot=True, fmt="d", cbar=False, cmap="flag", ax=ax1)
+sns.heatmap(conf_mat_optimized, annot=True, fmt="d", cbar=False, cmap="flag", ax=ax2)
+ax1.set_title("Default params.")
+ax2.set_title("Optimized params.")
+
+ax1.set_xlabel("Predicted")
+ax1.set_ylabel("Actual")
+ax2.set_xlabel("Predicted")
