@@ -1,9 +1,12 @@
 # Databricks notebook source
-# MAGIC %run ./data_helpers
+# MAGIC %run ../utils/run_target_helper
 
 # COMMAND ----------
 
-# MAGIC %run ../utils/run_target_helper
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+import numpy as np
+import pandas as pd
 
 # COMMAND ----------
 
@@ -16,12 +19,23 @@ settings = get_settings(dbutils.widgets.get("TARGET"))
 gold_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
 df_gold = spark.table(gold_table)
 
-X_train, X_test, y_train, y_test, z_train, z_test = get_training_dataset(df_gold)
+data = df_gold.select("id", "lemmatized_text", "lemmatized_title", "positive_review", "train_test").toPandas()
 
 # COMMAND ----------
 
-for array in [X_train, X_test, y_train, y_test, z_train, z_test]:
-  print(array.shape)
+# MAGIC %md
+# MAGIC Create the vectorized bag-of-words model, and get the train and test data.
+
+# COMMAND ----------
+
+to_tfidf = TfidfVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
+tfidf_bag = to_tfidf.fit_transform(data['lemmatized_text'].values)
+
+X_train = tfidf_bag.toarray()[data[data["train_test"] == "train"].index]
+z_train = data[data["train_test"] == "train"]["positive_review"].values
+
+X_test = tfidf_bag.toarray()[data[data["train_test"] == "test"].index]
+z_test = data[data["train_test"] == "test"]["positive_review"].values
 
 # COMMAND ----------
 
@@ -52,14 +66,14 @@ models = [
     ),
     BalancedRandomForestClassifier(
         n_estimators=n_estimators,
-        bootstrap=False,  # pyright: ignore
+        # bootstrap=True,  # pyright: ignore
         sampling_strategy="all",
         replacement=True,  # pyright: ignore
         n_jobs=n_jobs,
     ),
     BalancedRandomForestClassifier(
         n_estimators=n_estimators,
-        bootstrap=False,  # pyright: ignore
+        # bootstrap=False,  # pyright: ignore
         sampling_strategy="not minority",
         replacement=True,  # pyright: ignore
         n_jobs=n_jobs,

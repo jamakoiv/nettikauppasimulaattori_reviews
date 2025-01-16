@@ -8,31 +8,20 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./data_helpers
-
-# COMMAND ----------
-
-import pyspark
-
-# COMMAND ----------
-
 # MAGIC %run ../utils/run_target_helper
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC First import necessary libraries. Optuna is not included in the databricks ML runtime and should be configured manually from *compute->cluster->libraries*.
+# MAGIC First import necessary libraries and data. Optuna is not included in the databricks ML runtime and should be configured manually from *compute->cluster->libraries*.
 # MAGIC
 # MAGIC NOTE: install both *optuna* and *optuna-integration*
 
 # COMMAND ----------
 
-# MAGIC %pip install optuna optuna-integration
-
-# COMMAND ----------
-
 import optuna
 
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import confusion_matrix
 from pyspark.sql import SparkSession
 from imblearn.ensemble import BalancedRandomForestClassifier
@@ -40,7 +29,24 @@ from imblearn.ensemble import BalancedRandomForestClassifier
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# from data_helpers import get_training_dataset
+settings = get_settings(dbutils.widgets.get("TARGET"))
+n_trials = int(dbutils.widgets.get("N_TRIALS"))
+
+gold_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
+df_gold = spark.table(gold_table)
+
+data = df_gold.select("id", "lemmatized_text", "lemmatized_title", "positive_review", "train_test").toPandas()
+
+# COMMAND ----------
+
+to_tfidf = TfidfVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
+tfidf_bag = to_tfidf.fit_transform(data['lemmatized_text'].values)
+
+X_train = tfidf_bag.toarray()[data[data["train_test"] == "train"].index]
+z_train = data[data["train_test"] == "train"]["positive_review"].values
+
+X_test = tfidf_bag.toarray()[data[data["train_test"] == "test"].index]
+z_test = data[data["train_test"] == "test"]["positive_review"].values
 
 # COMMAND ----------
 
@@ -48,17 +54,17 @@ import seaborn as sns
 # MAGIC Optuna works by defining a study and a target function. The target function must define a parameter space for the parameters of interest, and return a score which can be used to track how good the parameters were.
 # MAGIC The study will generate trials for the target function, and track the parameters which have already been tried.
 # MAGIC
-# MAGIC Very simplistic example:
+# MAGIC Very simplistic example of finding the solution for function $$x^2 - 3x = 0$$:
 
 # COMMAND ----------
 
 example_study = optuna.create_study(direction="minimize")
 
 def target_function(trial: optuna.Trial) -> float:
-    x = trial.suggest_float("x", -10, 10)
-    return x**2 - (3*x)
+    x = trial.suggest_float("x", 0, 10)
+    return abs(x**2 - 3*x + 5)
 
-example_study.optimize(target_function, n_trials=50)
+example_study.optimize(target_function, n_trials=100)
 
 
 # COMMAND ----------
@@ -131,21 +137,6 @@ class OptunaObjective():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Import data as usual.
-
-# COMMAND ----------
-
-settings = get_settings(dbutils.widgets.get("TARGET"))
-n_trials = int(dbutils.widgets.get("N_TRIALS"))
-
-gold_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
-df_gold = spark.table(gold_table)
-
-X_train, X_test, y_train, y_test, z_train, z_test = get_training_dataset(df_gold)
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC For parallel optimization in spark, we can use joblib with the spark-backend.
 
 # COMMAND ----------
@@ -174,7 +165,6 @@ mlflow.autolog(disable=True)
 
 from optuna.integration.mlflow import MLflowCallback
 
-
 experiment_name = "/Users/jaakko.m.koivisto@gmail.com/reviews"
 mlflow.set_experiment(experiment_name)
 experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
@@ -194,9 +184,11 @@ mlflow_callback = MLflowCallback(
 
 study = optuna.create_study(direction="maximize")    
 obj = OptunaObjective(X_train, X_test, z_train, z_test)
+study.optimize(obj, n_trials=n_trials, callbacks=[mlflow_callback])
 
-with joblib.parallel_backend("spark", n_jobs=4):
-    study.optimize(obj, n_trials=n_trials, callbacks=[mlflow_callback])
+#with joblib.parallel_backend("spark", n_jobs=8):
+#    study.optimize(obj, n_trials=n_trials, callbacks=[mlflow_callback])
+
 
 # COMMAND ----------
 
@@ -211,7 +203,7 @@ print(study.best_trial.params)
 
 mlflow.autolog(disable=True)
 
-model_default = BalancedRandomForestClassifier()
+model_default = BalancedRandomForestClassifier(sampling_strategy="all", replacement=True)
 model_default = model_default.fit(X_train, z_train) 
 pred_default = model_default.predict(X_test)
 
