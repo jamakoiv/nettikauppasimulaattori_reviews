@@ -24,7 +24,7 @@ downstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, concat, lit
 
 df = spark.table(upstream_table)
 df_fi = df.filter(df.language == "fi") # For now we only look Finnish reviews. Would be possible to take list of identified languages, create stanza NPL pipeline for each, and run the lemmatization.
@@ -138,6 +138,7 @@ loader = zip(
     vectorizer_input_title,
 )
 df_res = spark.createDataFrame(loader, schema=schema)
+df_res = df_res.withColumn("lemmatized", concat(df_res["lemmatized_title"], lit(" "), df_res["lemmatized_text"]))
 
 df_final = df.join(df_res, "id")
 
@@ -146,7 +147,7 @@ assert (
 ), "Final table is not the same length as the lemmatized text/title dataset. Probably JOIN failed somehow, duplicate data, or xyz..."
 
 df_final.write.mode("overwrite").partitionBy("brand_name").parquet(
-    f"tmp/{downstream_table}"
+    f"/tmp/{downstream_table}"
 )
 df_final.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
 
