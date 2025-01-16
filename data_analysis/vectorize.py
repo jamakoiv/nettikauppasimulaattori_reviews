@@ -44,6 +44,9 @@
 # MAGIC showing that we preserve atleast some information from the word order.
 # MAGIC
 # MAGIC First import the necessary vectorizers and lemmatized review texts from upstream notebooks.
+# MAGIC
+# MAGIC NOTE: We will not save the vectors. It is more convenient and faster to do the vectorization step as the parameter space can get quite large and
+# MAGIC inefficient to save as regular tables. Does spark have special datatypes for sparse dataframes?
 
 # COMMAND ----------
 
@@ -53,10 +56,12 @@
 
 settings = get_settings(dbutils.widgets.get("TARGET"))
 
-upstream_table = "verkkokauppa_reviews_silver" + settings["table_suffix"]
-downstream_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
+upstream_table = "verkkokauppa_reviews_gold" + settings["table_suffix"]
 
 # COMMAND ----------
+
+import pandas as pd
+import numpy as np
 
 from sklearn.feature_extraction.text import (
     CountVectorizer,
@@ -64,10 +69,10 @@ from sklearn.feature_extraction.text import (
     TfidfVectorizer,
 )
 from sklearn.model_selection import train_test_split
+from pyspark.sql.functions import col, lit
 
-df = spark.table(upstream_table)
-
-data = df.select("id", "lemmatized", "rating").toPandas()
+df_gold = spark.table(upstream_table)
+data = df_gold.select("id", "lemmatized", "rating").toPandas()
 
 # COMMAND ----------
 
@@ -94,17 +99,12 @@ data = df.select("id", "lemmatized", "rating").toPandas()
 to_count = CountVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
 count_bag = to_count.fit_transform(data['lemmatized'].values)
 
-print(count_bag.shape)
-print(type(count_bag))
-
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC For actual analysis we employ TF-IDF features.
 # MAGIC
 # MAGIC read and explain....
-# MAGIC
-# MAGIC NOTE: We could also use TfidfVectorizer, which is equivalent to running CountVectorizer followed by TfidfTransformer. Here we use these separately so we can inspect individual word counts if we want.
 
 # COMMAND ----------
 
@@ -114,65 +114,9 @@ tfidf_bag = to_tfidf.fit_transform(count_bag)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Create new dataframe with the results and join with original.
+# MAGIC When actually using the vectors we can use the *TfidfVectorizer* which does the *CountVectorizer* and *TfidfTransformer* steps in single step.
 
 # COMMAND ----------
 
-data = data.assign(tfidf=tfidf_bag.toarray().tolist())
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Apply the test-train split, save as a label to the dataframe.
-# MAGIC
-# MAGIC TODO: Should this be here, before vectorization, or left to the first analysis step?
-# MAGIC Currently left here so we can use same train-test split in the model training and basic analysis steps.
-
-# COMMAND ----------
-
-import numpy as np
-import pandas as pd
-
-from pyspark.sql.functions import col, lit
-from sklearn.model_selection import train_test_split
-
-# Create train-test split
-id_train, id_test = train_test_split(
-    data['id'], test_size=0.25, stratify=data['rating'].values
-)
-
-data['train_test'] = np.where(data['id'].isin(id_train), 'train', 'test')
-
-# Join labels back to the original DataFrame
-df = df.join(spark.createDataFrame(data[['id', 'train_test', 'tfidf']]), "id")
-
-display(df)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Tag reviews as positive or negative for binary classification. This should be easier to handle than classification into 5 categories.
-
-# COMMAND ----------
-
-df = df.withColumn("positive_review", when(df.rating >= 4, 1).when(df.rating < 4, 0))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Save table as usual. Save also the vocabulary since we need it for the inference step for creating a vectorizer for this word-set.
-
-# COMMAND ----------
-
-df.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable(downstream_table)
-df.write.mode("overwrite").parquet(f"/tmp/{downstream_table}")
-
-voc_schema = StructType(
-    [StructField("word", StringType(), False), StructField("id", IntegerType(), False)]
-)
-voc_values = [ int(v) for v in to_count.vocabulary_.values() ] # Convert to python int just in case.
-voc_loader = zip(to_count.vocabulary_.keys(), voc_values)
-
-df_voc = spark.createDataFrame(voc_loader, schema=voc_schema)
-df_voc.write.mode("overwrite").option("overwriteSchema", "True").format("delta").saveAsTable("verkkokauppa_reviews_vocabulary_fi")
-df_voc.write.mode("overwrite").parquet("/tmp/verkkokauppa_reviews_vocabulary_fi")
+to_tfidf = TfidfVectorizer(max_df = 0.80, min_df = 2, ngram_range=(1,4))
+tfidf_bag = to_tfidf.fit_transform(data['lemmatized'].values)
